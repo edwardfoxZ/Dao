@@ -133,9 +133,11 @@ contract Dao {
         );
         // complex the shares to execute
         require(
-            (proposal.votes / totalShares) * 100 >= quorum,
-            "votes are enough to execute"
+            (proposal.votes * 100) / totalShares >= quorum,
+            "votes are not enough to execute"
         );
+
+        proposal.executed = true; // Mark as executed
         _transferEther(proposal.amount, proposal.recipient);
     }
 
