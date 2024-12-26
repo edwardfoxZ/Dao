@@ -4,16 +4,15 @@ import Web3 from "web3";
 import detectEthereumProvider from "@metamask/detect-provider";
 import UseWeb3 from "./hooks/useWeb3";
 import Proposals from "./components/proposals";
-import Dao from "./contracts/Dao.json";
+import useShares from "./hooks/useShares";
+import useAvailableFunds from "./hooks/useAvailableFunds";
 
 function App() {
   const { web3Api, setWeb3Api } = UseWeb3();
   const { contract, isLoading, web3, status, isError } = web3Api;
-
-  const [availabeFunds, setAvailableFunds] = useState(0);
-  const [shares, setShares] = useState(0);
+  const { isAllowedToCreate, shares } = useShares();
+  const { availabeFunds } = useAvailableFunds();
   const [amount, setAmount] = useState("");
-  const [isAllowedToCreate, setIsAllowedToCreate] = useState(false);
 
   useEffect(() => {
     const loadProvider = async () => {
@@ -34,24 +33,7 @@ function App() {
 
         await provider.request({ method: "eth_requestAccounts" });
 
-        const networkId = await web3Instance.eth.net.getId();
-        const deploymentNetwork = Dao.networks[networkId];
-
-        if (!deploymentNetwork) {
-          console.error("Smart contract not deployed to the detected network.");
-          setWeb3Api((api) => ({
-            ...api,
-            isLoading: false,
-            status: "Smart contract not deployed.",
-          }));
-          return;
-        }
-
         const accounts = await web3Instance.eth.getAccounts();
-        const contractInstance = new web3Instance.eth.Contract(
-          Dao.abi,
-          deploymentNetwork.address
-        );
 
         window.ethereum.on("accountsChanged", (accounts) => {
           setWeb3Api({ accounts: accounts });
@@ -61,7 +43,6 @@ function App() {
           currentAccount: accounts[0],
           web3: web3Instance,
           provider: provider,
-          contract: contractInstance,
           isLoading: false,
           accounts: accounts,
           status: "Connected",
@@ -78,43 +59,6 @@ function App() {
 
     loadProvider();
   }, [setWeb3Api]);
-
-  useEffect(() => {
-    if (contract) {
-      const loadFunds = async () => {
-        try {
-          const funds = await contract.methods.availabeFunds().call();
-          const fundsInEther = web3.utils.fromWei(funds, "ether");
-          setAvailableFunds(fundsInEther);
-
-          if (parseFloat(fundsInEther) > 0) {
-            setIsAllowedToCreate(true);
-          }
-        } catch (error) {
-          console.error("Error fetching funds:", error);
-          setWeb3Api((api) => ({
-            ...api,
-            status: "Error fetching funds.",
-          }));
-        }
-      };
-      loadFunds();
-    }
-  }, [contract, web3]);
-
-  useEffect(() => {
-    if (contract) {
-      const loadShares = async () => {
-        const shares = await contract.methods
-          .shares(web3Api.currentAccount)
-          .call();
-        const sharesinEther = web3.utils.fromWei(shares, "ether");
-        setShares(sharesinEther);
-      };
-
-      loadShares();
-    }
-  }, [contract, web3Api.currentAccount]);
 
   const handleSendBu = useCallback(
     async (e) => {
@@ -145,7 +89,9 @@ function App() {
         }));
 
         const updatedFunds = await contract.methods.availabeFunds().call();
-        setAvailableFunds(web3.utils.fromWei(updatedFunds, "ether"));
+        setWeb3Api({
+          availableFunds: web3.utils.fromWei(updatedFunds, "ether"),
+        });
       } catch (error) {
         console.error("Transaction failed:", error);
         setWeb3Api((api) => ({
